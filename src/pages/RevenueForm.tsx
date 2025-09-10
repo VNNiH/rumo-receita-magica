@@ -110,35 +110,62 @@ const RevenueForm = () => {
     return formData.packageValue - totalCosts;
   };
 
-  useEffect(() => {
-    setFreeRevenue(calculateFreeRevenue());
-  }, [formData]);
+  const mapeamentoInfos = (rev: any): FormData => {
+    return {
+      date: rev["Data de Entrada"]
+        ? new Date(rev["Data de Entrada"]).toISOString().split("T")[0]
+        : "",
+
+      expedition: expeditions.find(
+        exp => exp.name === rev["Passeio"] || exp.id === rev["Passeio"]
+      )?.id || "",
+
+      seller: rev["Vendedor Interno"] || "",
+      packageValue: rev["Valor do Passeio"] || 0,
+      clientName: "",
+      guidesCost: rev["Custo Guia"] || 0,
+      commissionCost: rev["Custo Comissão"] || 0,
+      ferryCost: 0,
+      coolerCost: rev["Custo Cooler"] || 0,
+      fuelCost: rev["Custo Combustivel"] || 0,
+      externalSeller: rev["Vendedor Externo"] || "",
+      idVehicle: rev["ID Veiculo"] || "",
+      observation: "",
+      status: rev["STATUS"] || "ABERTO",
+    };
+  };
+
+
 
   useEffect(() => {
-  if (currentView === "open") {
-    const fetchOpenRevenues = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch("https://ron8n.myrvm.com.br/webhook/receitas-aberto");
-        if (!response.ok) throw new Error(`Erro na rede: ${response.status}`);
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          setOpenRevenues(data);
-        } else {
-          console.error("A resposta recebida não é um array:", data);
+    setFreeRevenue(calculateFreeRevenue());
+  }, [formData]);
+
+  useEffect(() => {
+    if (currentView === "open") {
+      const fetchOpenRevenues = async () => {
+        setLoading(true);
+        try {
+          const response = await fetch("https://ron8n.myrvm.com.br/webhook/receitas-aberto");
+          if (!response.ok) throw new Error(`Erro na rede: ${response.status}`);
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            setOpenRevenues(data);
+          } else {
+            console.error("A resposta recebida não é um array:", data);
+            setOpenRevenues([]);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar receitas em aberto:", err);
+          toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados.", variant: "destructive" });
           setOpenRevenues([]);
+        } finally {
+          setLoading(false);
         }
-      } catch (err) {
-        console.error("Erro ao buscar receitas em aberto:", err);
-        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados.", variant: "destructive" });
-        setOpenRevenues([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOpenRevenues();
-  }
-}, [currentView]);
+      };
+      fetchOpenRevenues();
+    }
+  }, [currentView]);
 
   // Alterações de Selects
   const handleSellerChange = (sellerId: string) => {
@@ -263,386 +290,375 @@ const RevenueForm = () => {
     );
   }
 
-// RECEITAS EM ABERTO
-if (currentView === "open") {
+  // RECEITAS EM ABERTO
+  if (currentView === "open") {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-md mx-auto space-y-6">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCurrentView("menu")}
+                  className="p-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Receitas em Aberto
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <p className="text-center py-4">Carregando...</p>
+              ) : (
+                <div className="space-y-3">
+                  {!Array.isArray(openRevenues) || openRevenues.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">
+                      Nenhuma receita em aberto
+                    </p>
+                  ) : (
+                    openRevenues.map((rev, i) => (
+                      <Card
+                        key={i}
+                        className="p-3 cursor-pointer hover:bg-gray-100 border-l-4 border-l-blue-500"
+                        onClick={() => {
+                          const mappedRevenue = mapeamentoInfos(rev);
+                          setFormData(mappedRevenue);
+                          setCurrentView("register");
+                        }}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">
+                              {rev.expedition || rev.expedition || "Expedição não informada"}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {rev.clientName || "Cliente não informado"}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {rev.date ? new Date(rev.date).toLocaleDateString('pt-BR') : "Data não informada"}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">
+                              R$ {rev.packageValue || 0}
+                            </p>
+                            <p className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                              {rev.status || "ABERTO"}
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // FORMULÁRIO DE REGISTRO
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto space-y-6">
-        <Card className="shadow-lg">
-          <CardHeader>
+        <div className="bg-white rounded-lg shadow-lg">
+          <div className="p-4 border-b">
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 onClick={() => setCurrentView("menu")}
-                className="p-2"
+                className="p-2 hover:bg-gray-100 rounded"
               >
                 <ArrowLeft className="w-4 h-4" />
-              </Button>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                Receitas em Aberto
-              </CardTitle>
+              </button>
+              <h2 className="flex items-center gap-2 text-xl font-bold">
+                <Plus className="w-5 h-5 text-green-600" />
+                Nova Receita
+              </h2>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <p className="text-center py-4">Carregando...</p>
-            ) : (
-              <div className="space-y-3">
-                {!Array.isArray(openRevenues) || openRevenues.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">
-                    Nenhuma receita em aberto
-                  </p>
-                ) : (
-                  openRevenues.map((rev, i) => (
-                    <Card
-                      key={i}
-                      className="p-3 cursor-pointer hover:bg-gray-100 border-l-4 border-l-blue-500"
-                      onClick={() => {
-                        // ✅ CORREÇÃO: Mapeia expedition do banco para o ID correto
-                        const mappedRevenue = {
-                          ...rev,
-                          // Tenta encontrar a expedition correta pelos nomes
-                          expedition: expeditions.find(exp => 
-                            exp.name === rev.expedition || 
-                            exp.name === rev.expedition ||
-                            exp.id === rev.expedition
-                          )?.id || rev.expedition
-                        };
-                        
-                        console.log("Receita selecionada:", mappedRevenue);
-                        setFormData(mappedRevenue);
-                        setCurrentView("register");
-                      }}
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-medium">
-                            {rev.expedition || rev.expedition || "Expedição não informada"}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {rev.clientName || "Cliente não informado"}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {rev.date ? new Date(rev.date).toLocaleDateString('pt-BR') : "Data não informada"}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-green-600">
-                            R$ {rev.packageValue || 0}
-                          </p>
-                          <p className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                            {rev.status || "ABERTO"}
-                          </p>
-                        </div>
-                      </div>
-                    </Card>
-                  ))
-                )}
+          </div>
+          <div className="p-4 space-y-4">
+            {/* Data */}
+            <div className="space-y-2">
+              <label htmlFor="date" className="flex items-center gap-2 font-medium text-gray-700">
+                <Calendar className="w-4 h-4" />
+                Data *
+              </label>
+              <input
+                id="date"
+                type="date"
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, date: e.target.value }))
+                }
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Expedição */}
+            <div className="space-y-2">
+              <label className="font-medium text-gray-700">Expedição *</label>
+              <select
+                value={formData.expedition}
+                onChange={(e) => handleExpeditionChange(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Selecione a expedição</option>
+                {expeditions.map((exp) => (
+                  <option key={exp.id} value={exp.id}>
+                    {exp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Vendedor */}
+            <div className="space-y-2">
+              <label className="font-medium text-gray-700">Vendedor</label>
+              <select
+                value={formData.seller}
+                onChange={(e) => handleSellerChange(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Selecione o vendedor</option>
+                {sellers.map((seller) => (
+                  <option key={seller.id} value={seller.id}>
+                    {seller.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Valor do Pacote */}
+            <div className="space-y-2">
+              <label htmlFor="packageValue" className="flex items-center gap-2 font-medium text-gray-700">
+                <DollarSign className="w-4 h-4" />
+                Valor do Pacote (R$)
+              </label>
+              <input
+                id="packageValue"
+                type="number"
+                value={formData.packageValue}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    packageValue: parseFloat(e.target.value) || 0,
+                  }))
+                }
+                placeholder="0.00"
+                step="0.01"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Nome do Cliente */}
+            <div className="space-y-2">
+              <label htmlFor="clientName" className="font-medium text-gray-700">Nome do Cliente</label>
+              <input
+                id="clientName"
+                value={formData.clientName}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, clientName: e.target.value }))
+                }
+                placeholder="Nome do cliente"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* ID Veículo */}
+            <div className="space-y-2">
+              <label htmlFor="idVehicle" className="font-medium text-gray-700">ID do Veículo</label>
+              <input
+                id="idVehicle"
+                value={formData.idVehicle}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, idVehicle: e.target.value }))
+                }
+                placeholder="ID do veículo"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Custos */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label htmlFor="guidesCost" className="font-medium text-gray-700">Custo Guias (R$)</label>
+                <input
+                  id="guidesCost"
+                  type="number"
+                  value={formData.guidesCost}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      guidesCost: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  placeholder="0.00"
+                  step="0.01"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
+
+              <div className="space-y-2">
+                <label htmlFor="commissionCost" className="font-medium text-gray-700">Comissão (R$)</label>
+                <input
+                  id="commissionCost"
+                  type="number"
+                  value={formData.commissionCost}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      commissionCost: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  placeholder="0.00"
+                  step="0.01"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="ferryCost" className="font-medium text-gray-700">Custo Balsa (R$)</label>
+                <input
+                  id="ferryCost"
+                  type="number"
+                  value={formData.ferryCost}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      ferryCost: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  placeholder="0.00"
+                  step="0.01"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="coolerCost" className="font-medium text-gray-700">Custo Cooler (R$)</label>
+                <input
+                  id="coolerCost"
+                  type="number"
+                  value={formData.coolerCost}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      coolerCost: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  placeholder="0.00"
+                  step="0.01"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2 col-span-2">
+                <label htmlFor="fuelCost" className="font-medium text-gray-700">Custo Combustível (R$)</label>
+                <input
+                  id="fuelCost"
+                  type="number"
+                  value={formData.fuelCost}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      fuelCost: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  placeholder="0.00"
+                  step="0.01"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Vendedor Externo */}
+            <div className="space-y-2">
+              <label htmlFor="externalSeller" className="font-medium text-gray-700">Vendedor Externo</label>
+              <input
+                id="externalSeller"
+                value={formData.externalSeller}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, externalSeller: e.target.value }))
+                }
+                placeholder="Nome do vendedor externo"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-2">
+              <label className="font-medium text-gray-700">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Selecione o status</option>
+                {status.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Observação */}
+            <div className="space-y-2">
+              <label htmlFor="observation" className="font-medium text-gray-700">Observação</label>
+              <input
+                id="observation"
+                value={formData.observation}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, observation: e.target.value }))
+                }
+                placeholder="Observações sobre a receita"
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Receita Livre */}
+            <div className="bg-green-50 border-2 border-green-200 rounded-lg">
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-green-600" />
+                    <span className="font-medium text-green-800">Receita Livre:</span>
+                  </div>
+                  <span className="text-xl font-bold text-green-600">
+                    R$ {freeRevenue.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-4 pt-4">
+              <button
+                onClick={() => setCurrentView("menu")}
+                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium"
+              >
+                Salvar Receita
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
-
-// FORMULÁRIO DE REGISTRO
-return (
-  <div className="min-h-screen bg-gray-50 p-4">
-    <div className="max-w-md mx-auto space-y-6">
-      <div className="bg-white rounded-lg shadow-lg">
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentView("menu")}
-              className="p-2 hover:bg-gray-100 rounded"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <h2 className="flex items-center gap-2 text-xl font-bold">
-              <Plus className="w-5 h-5 text-green-600" />
-              Nova Receita
-            </h2>
-          </div>
-        </div>
-        <div className="p-4 space-y-4">
-          {/* Data */}
-          <div className="space-y-2">
-            <label htmlFor="date" className="flex items-center gap-2 font-medium text-gray-700">
-              <Calendar className="w-4 h-4" />
-              Data *
-            </label>
-            <input
-              id="date"
-              type="date"
-              value={formData.date}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, date: e.target.value }))
-              }
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Expedição */}
-          <div className="space-y-2">
-            <label className="font-medium text-gray-700">Expedição *</label>
-            <select 
-              value={formData.expedition} 
-              onChange={(e) => handleExpeditionChange(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Selecione a expedição</option>
-              {expeditions.map((exp) => (
-                <option key={exp.id} value={exp.id}>
-                  {exp.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Vendedor */}
-          <div className="space-y-2">
-            <label className="font-medium text-gray-700">Vendedor</label>
-            <select 
-              value={formData.seller} 
-              onChange={(e) => handleSellerChange(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Selecione o vendedor</option>
-              {sellers.map((seller) => (
-                <option key={seller.id} value={seller.id}>
-                  {seller.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Valor do Pacote */}
-          <div className="space-y-2">
-            <label htmlFor="packageValue" className="flex items-center gap-2 font-medium text-gray-700">
-              <DollarSign className="w-4 h-4" />
-              Valor do Pacote (R$)
-            </label>
-            <input
-              id="packageValue"
-              type="number"
-              value={formData.packageValue}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  packageValue: parseFloat(e.target.value) || 0,
-                }))
-              }
-              placeholder="0.00"
-              step="0.01"
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Nome do Cliente */}
-          <div className="space-y-2">
-            <label htmlFor="clientName" className="font-medium text-gray-700">Nome do Cliente</label>
-            <input
-              id="clientName"
-              value={formData.clientName}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, clientName: e.target.value }))
-              }
-              placeholder="Nome do cliente"
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* ID Veículo */}
-          <div className="space-y-2">
-            <label htmlFor="idVehicle" className="font-medium text-gray-700">ID do Veículo</label>
-            <input
-              id="idVehicle"
-              value={formData.idVehicle}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, idVehicle: e.target.value }))
-              }
-              placeholder="ID do veículo"
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Custos */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="guidesCost" className="font-medium text-gray-700">Custo Guias (R$)</label>
-              <input
-                id="guidesCost"
-                type="number"
-                value={formData.guidesCost}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    guidesCost: parseFloat(e.target.value) || 0,
-                  }))
-                }
-                placeholder="0.00"
-                step="0.01"
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="commissionCost" className="font-medium text-gray-700">Comissão (R$)</label>
-              <input
-                id="commissionCost"
-                type="number"
-                value={formData.commissionCost}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    commissionCost: parseFloat(e.target.value) || 0,
-                  }))
-                }
-                placeholder="0.00"
-                step="0.01"
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="ferryCost" className="font-medium text-gray-700">Custo Balsa (R$)</label>
-              <input
-                id="ferryCost"
-                type="number"
-                value={formData.ferryCost}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    ferryCost: parseFloat(e.target.value) || 0,
-                  }))
-                }
-                placeholder="0.00"
-                step="0.01"
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="coolerCost" className="font-medium text-gray-700">Custo Cooler (R$)</label>
-              <input
-                id="coolerCost"
-                type="number"
-                value={formData.coolerCost}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    coolerCost: parseFloat(e.target.value) || 0,
-                  }))
-                }
-                placeholder="0.00"
-                step="0.01"
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="space-y-2 col-span-2">
-              <label htmlFor="fuelCost" className="font-medium text-gray-700">Custo Combustível (R$)</label>
-              <input
-                id="fuelCost"
-                type="number"
-                value={formData.fuelCost}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    fuelCost: parseFloat(e.target.value) || 0,
-                  }))
-                }
-                placeholder="0.00"
-                step="0.01"
-                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Vendedor Externo */}
-          <div className="space-y-2">
-            <label htmlFor="externalSeller" className="font-medium text-gray-700">Vendedor Externo</label>
-            <input
-              id="externalSeller"
-              value={formData.externalSeller}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, externalSeller: e.target.value }))
-              }
-              placeholder="Nome do vendedor externo"
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Status */}
-          <div className="space-y-2">
-            <label className="font-medium text-gray-700">Status</label>
-            <select 
-              value={formData.status} 
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Selecione o status</option>
-              {status.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Observação */}
-          <div className="space-y-2">
-            <label htmlFor="observation" className="font-medium text-gray-700">Observação</label>
-            <input
-              id="observation"
-              value={formData.observation}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, observation: e.target.value }))
-              }
-              placeholder="Observações sobre a receita"
-              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Receita Livre */}
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg">
-            <div className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-green-600" />
-                  <span className="font-medium text-green-800">Receita Livre:</span>
-                </div>
-                <span className="text-xl font-bold text-green-600">
-                  R$ {freeRevenue.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Botões */}
-          <div className="flex gap-4 pt-4">
-            <button
-              onClick={() => setCurrentView("menu")}
-              className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded hover:bg-gray-50 font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium"
-            >
-              Salvar Receita
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
 };
 
 export default RevenueForm;
