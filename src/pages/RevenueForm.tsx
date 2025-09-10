@@ -39,6 +39,7 @@ interface FormData {
   externalSeller: string;
   observation: string;
   status: string;
+  row_number?: number; // ✅ NOVO CAMPO para identificar receitas existentes
 }
 
 // ==================== Dados fixos ====================
@@ -90,13 +91,14 @@ const RevenueForm = () => {
     idVehicle: "",
     observation: "",
     status: "",
+    row_number: undefined, // ✅ NOVO CAMPO
   });
 
   const [freeRevenue, setFreeRevenue] = useState(0);
-
-  // ✅ estados que estavam faltando
   const [loading, setLoading] = useState(false);
-  const [openRevenues, setOpenRevenues] = useState<FormData[]>([]);
+  const [openRevenues, setOpenRevenues] = useState<any[]>([]);
+
+  // ==================== Funções Auxiliares ====================
 
   // Função que calcula receita livre
   const calculateFreeRevenue = () => {
@@ -110,36 +112,118 @@ const RevenueForm = () => {
     return formData.packageValue - totalCosts;
   };
 
+  // Função para formatar data para input (YYYY-MM-DD)
+  const formatDateForInput = (dateString: string) => {
+    if (!dateString) return "";
+    
+    try {
+      // Se a data já está no formato YYYY-MM-DD, retorna como está
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateString;
+      }
+      
+      // Se a data está no formato DD/MM/YYYY, converte
+      if (dateString.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+        const [day, month, year] = dateString.split('/');
+        return `${year}-${month}-${day}`;
+      }
+      
+      // Tenta criar uma data e converter
+      const date = new Date(dateString);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0];
+      }
+      
+      return "";
+    } catch (error) {
+      console.error("Erro ao formatar data:", error);
+      return "";
+    }
+  };
+
+  // Função para formatar data para exibição (DD/MM/YYYY) - evita problema de fuso horário
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return "Data não informada";
+    
+    try {
+      // Se a data está no formato YYYY-MM-DD, processa diretamente
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = dateString.split('-');
+        return `${day}/${month}/${year}`;
+      }
+      
+      // Se a data está no formato DD/MM/YYYY, retorna como está
+      if (dateString.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+        return dateString;
+      }
+      
+      // Para outros formatos, tenta converter evitando problemas de fuso
+      const date = new Date(dateString + 'T12:00:00'); // Adiciona horário meio-dia para evitar problemas de fuso
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('pt-BR');
+      }
+      
+      return dateString; // Retorna original se não conseguir converter
+    } catch (error) {
+      console.error("Erro ao formatar data para exibição:", error);
+      return dateString;
+    }
+  };
+
+  // Função para mapear dados da API para o formulário
   const mapeamentoInfos = (rev: any): FormData => {
     return {
-      date: rev["Data de Entrada"]
-        ? new Date(rev["Data de Entrada"]).toISOString().split("T")[0]
-        : "",
-
+      date: formatDateForInput(rev["Data de Entrada"] || ""),
       expedition: expeditions.find(
         exp => exp.name === rev["Passeio"] || exp.id === rev["Passeio"]
       )?.id || "",
-
       seller: rev["Vendedor Interno"] || "",
-      packageValue: rev["Valor do Passeio"] || 0,
-      clientName: "",
-      guidesCost: rev["Custo Guia"] || 0,
-      commissionCost: rev["Custo Comissão"] || 0,
-      ferryCost: 0,
-      coolerCost: rev["Custo Cooler"] || 0,
-      fuelCost: rev["Custo Combustivel"] || 0,
+      packageValue: parseFloat(rev["Valor do Passeio"] || 0),
+      clientName: rev["Nome do Cliente"] || "",
+      guidesCost: parseFloat(rev["Custo Guia"] || 0),
+      commissionCost: parseFloat(rev["Custo Comissão"] || 0),
+      ferryCost: parseFloat(rev["Custo Balsa"] || 0),
+      coolerCost: parseFloat(rev["Custo Cooler"] || 0),
+      fuelCost: parseFloat(rev["Custo Combustivel"] || 0),
       externalSeller: rev["Vendedor Externo"] || "",
       idVehicle: rev["ID Veiculo"] || "",
-      observation: "",
+      observation: rev["Observação"] || "",
       status: rev["STATUS"] || "ABERTO",
+      row_number: rev["row_number"] || rev["Row Number"] || undefined, // ✅ NOVO CAMPO
     };
   };
 
+  // Função para resetar o formulário
+  const resetFormData = () => {
+    setFormData({
+      date: "",
+      expedition: "",
+      seller: "",
+      packageValue: 0,
+      clientName: "",
+      guidesCost: 0,
+      commissionCost: 0,
+      ferryCost: 0,
+      coolerCost: 0,
+      fuelCost: 0,
+      externalSeller: "",
+      idVehicle: "",
+      observation: "",
+      status: "",
+      row_number: undefined, // ✅ IMPORTANTE: Limpa o row_number
+    });
+  };
 
+  // ==================== Effects ====================
 
   useEffect(() => {
     setFreeRevenue(calculateFreeRevenue());
   }, [formData]);
+
+  // Monitorar mudanças na data para debug
+  useEffect(() => {
+    console.log("formData.date mudou para:", formData.date);
+  }, [formData.date]);
 
   useEffect(() => {
     if (currentView === "open") {
@@ -147,25 +231,46 @@ const RevenueForm = () => {
         setLoading(true);
         try {
           const response = await fetch("https://ron8n.myrvm.com.br/webhook/receitas-aberto");
-          if (!response.ok) throw new Error(`Erro na rede: ${response.status}`);
+          
+          if (!response.ok) {
+            throw new Error(`Erro na rede: ${response.status} - ${response.statusText}`);
+          }
+          
           const data = await response.json();
+          console.log("Dados recebidos da API:", data); // Para debug
+          
           if (Array.isArray(data)) {
             setOpenRevenues(data);
+          } else if (data && Array.isArray(data.data)) {
+            // Caso os dados venham dentro de um objeto com propriedade 'data'
+            setOpenRevenues(data.data);
           } else {
             console.error("A resposta recebida não é um array:", data);
             setOpenRevenues([]);
+            toast({ 
+              title: "Formato de dados inválido", 
+              description: "Os dados recebidos não estão no formato esperado.", 
+              variant: "destructive" 
+            });
           }
         } catch (err) {
           console.error("Erro ao buscar receitas em aberto:", err);
-          toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados.", variant: "destructive" });
+          toast({ 
+            title: "Erro ao Carregar", 
+            description: "Não foi possível buscar os dados. Verifique sua conexão.", 
+            variant: "destructive" 
+          });
           setOpenRevenues([]);
         } finally {
           setLoading(false);
         }
       };
+      
       fetchOpenRevenues();
     }
-  }, [currentView]);
+  }, [currentView, toast]);
+
+  // ==================== Handlers ====================
 
   // Alterações de Selects
   const handleSellerChange = (sellerId: string) => {
@@ -187,9 +292,9 @@ const RevenueForm = () => {
     }
   };
 
-  // Envia dados para o webhook (N8N)
+  // Envia dados para o webhook (N8N) - CREATE ou UPDATE
   const handleSubmit = async () => {
-    if (!formData.date || !formData.expedition) {
+    if (!formData.date || !formData.expedition || !formData.status) {
       toast({
         title: "Erro",
         description: "Preencha todos os campos obrigatórios",
@@ -201,6 +306,7 @@ const RevenueForm = () => {
     const payload = {
       ...formData,
       receitaLivre: freeRevenue,
+      operation: formData.row_number ? "update" : "create", // ✅ NOVO CAMPO
     };
 
     try {
@@ -215,29 +321,15 @@ const RevenueForm = () => {
 
       if (!response.ok) throw new Error("Erro ao enviar para o N8N");
 
+      const isUpdate = formData.row_number !== undefined;
+      
       toast({
-        title: "Receita Registrada!",
+        title: isUpdate ? "Receita Atualizada!" : "Receita Registrada!",
         description: `Receita livre: R$ ${freeRevenue.toFixed(2)}`,
       });
 
-      // limpa formulário
-      setFormData({
-        date: "",
-        expedition: "",
-        seller: "",
-        packageValue: 0,
-        clientName: "",
-        guidesCost: 0,
-        commissionCost: 0,
-        ferryCost: 0,
-        coolerCost: 0,
-        fuelCost: 0,
-        externalSeller: "",
-        idVehicle: "",
-        observation: "",
-        status: "",
-      });
-
+      // Limpa formulário
+      resetFormData();
       setCurrentView("menu");
     } catch (error) {
       console.error("Erro ao enviar dados:", error);
@@ -265,7 +357,10 @@ const RevenueForm = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <Button
-                onClick={() => setCurrentView("register")}
+                onClick={() => {
+                  resetFormData(); // ✅ Garante que é uma nova receita
+                  setCurrentView("register");
+                }}
                 variant="hero"
                 size="lg"
                 className="w-full h-16 text-lg"
@@ -297,24 +392,41 @@ const RevenueForm = () => {
         <div className="max-w-md mx-auto space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCurrentView("menu")}
+                    className="p-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                    Receitas em Aberto
+                  </CardTitle>
+                </div>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={() => setCurrentView("menu")}
-                  className="p-2"
+                  onClick={() => {
+                    // Força uma nova busca
+                    setCurrentView("menu");
+                    setTimeout(() => setCurrentView("open"), 100);
+                  }}
+                  disabled={loading}
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  🔄 Atualizar
                 </Button>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Receitas em Aberto
-                </CardTitle>
               </div>
             </CardHeader>
             <CardContent>
               {loading ? (
-                <p className="text-center py-4">Carregando...</p>
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-gray-500">Carregando receitas em aberto...</p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {!Array.isArray(openRevenues) || openRevenues.length === 0 ? (
@@ -335,21 +447,21 @@ const RevenueForm = () => {
                         <div className="flex justify-between items-center">
                           <div>
                             <p className="font-medium">
-                              {rev.expedition || rev.expedition || "Expedição não informada"}
+                              {rev["Passeio"] || "Expedição não informada"}
                             </p>
                             <p className="text-sm text-gray-500">
-                              {rev.clientName || "Cliente não informado"}
+                              {rev["Nome do Cliente"] || "Cliente não informado"}
                             </p>
                             <p className="text-sm text-gray-500">
-                              {rev.date ? new Date(rev.date).toLocaleDateString('pt-BR') : "Data não informada"}
+                              {formatDateForDisplay(rev["Data de Entrada"])}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-green-600">
-                              R$ {rev.packageValue || 0}
+                              R$ {rev["Valor do Passeio"] || 0}
                             </p>
                             <p className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
-                              {rev.status || "ABERTO"}
+                              {rev["STATUS"] || "ABERTO"}
                             </p>
                           </div>
                         </div>
@@ -365,7 +477,7 @@ const RevenueForm = () => {
     );
   }
 
-  // FORMULÁRIO DE REGISTRO
+  // FORMULÁRIO DE REGISTRO/EDIÇÃO
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-md mx-auto space-y-6">
@@ -380,7 +492,7 @@ const RevenueForm = () => {
               </button>
               <h2 className="flex items-center gap-2 text-xl font-bold">
                 <Plus className="w-5 h-5 text-green-600" />
-                Nova Receita
+                {formData.row_number ? "Editar Receita" : "Nova Receita"}
               </h2>
             </div>
           </div>
@@ -394,7 +506,7 @@ const RevenueForm = () => {
               <input
                 id="date"
                 type="date"
-                value={formData.date}
+                value={formData.date || ""} // ✅ Adiciona || "" para evitar undefined
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, date: e.target.value }))
                 }
@@ -651,7 +763,7 @@ const RevenueForm = () => {
                 onClick={handleSubmit}
                 className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium"
               >
-                Salvar Receita
+                {formData.row_number ? "Atualizar Receita" : "Salvar Receita"}
               </button>
             </div>
           </div>
@@ -662,3 +774,4 @@ const RevenueForm = () => {
 };
 
 export default RevenueForm;
+
