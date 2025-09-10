@@ -1,4 +1,4 @@
-import RevenueForm from "@/components/RevenueForm";
+import RevenueForm from "@/pages/RevenueForm";
 
 const Index = () => {
   return <RevenueForm />;
